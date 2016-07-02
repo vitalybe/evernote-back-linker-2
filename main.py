@@ -6,6 +6,9 @@ from lxml.cssselect import CSSSelector
 import re
 from local_settings import token
 
+from logging_config import getLogger
+logger = getLogger(__name__)
+
 BACKLINK_PREFIX = u"[[[Backlink:"
 BACKLINK_SUFIX = u"]]]"
 
@@ -31,15 +34,26 @@ def get_user():
     return user
 
 
-def find_recent_notes_metadata(recentDays=1):
+def find_recent_notes_metadata(recent_days=1):
     filter = NoteFilter()
     filter.ascending = False
     filter.order = NoteSortOrder.UPDATED
-    filter.words = "updated:day-" + str(recentDays)
+    filter.words = "updated:day-" + str(recent_days)
     spec = NotesMetadataResultSpec()
     spec.includeTitle = True
     spec.includeUpdated = True
-    return get_store().findNotesMetadata(token, filter, 0, 10, spec)
+
+    offset = 0
+    pagesize = 50
+    while True:
+        result = get_store().findNotesMetadata(token, filter, offset, pagesize, spec)
+        for metadata in result.notes:
+            yield metadata
+
+        if result.totalNotes <= offset:
+            break
+
+        offset += pagesize
 
 
 def note_by_guid(guid):
