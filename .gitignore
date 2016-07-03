@@ -2,3 +2,4 @@
 local_settings.py
 logs
 *.pyc
+last_run_date.txt

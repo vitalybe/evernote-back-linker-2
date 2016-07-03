@@ -1,3 +1,7 @@
+import json
+import os
+from datetime import datetime
+
 from evernote.api import client
 from evernote.edam.notestore.ttypes import NoteFilter, NotesMetadataResultSpec
 from evernote.edam.type.constants import NoteSortOrder
@@ -35,8 +39,10 @@ def get_user():
 
 
 def find_recent_notes_metadata(recent_days=1):
+    logger.info("function starting - find_recent_notes_metadata %d", recent_days)
+
     filter = NoteFilter()
-    filter.ascending = False
+    filter.ascending = True
     filter.order = NoteSortOrder.UPDATED
     filter.words = "updated:day-" + str(recent_days)
     spec = NotesMetadataResultSpec()
@@ -46,69 +52,108 @@ def find_recent_notes_metadata(recent_days=1):
     offset = 0
     pagesize = 50
     while True:
+        logger.info("fetching, offset: %d", offset)
         result = get_store().findNotesMetadata(token, filter, offset, pagesize, spec)
+        logger.info("fetched %d out of %d notes", len(result.notes), result.totalNotes)
         for metadata in result.notes:
             yield metadata
+
+        offset += pagesize
 
         if result.totalNotes <= offset:
             break
 
-        offset += pagesize
 
 
 def note_by_guid(guid):
-    return get_store().getNote(token, guid, True, False, False, False);
+    logger.debug("function starting - note_by_guid: %s", guid)
+    note = get_store().getNote(token, guid, True, False, False, False);
+    logger.debug("found note title: %s", note.title)
+    return note
 
 
 def find_recent_notes(recent_days=1):
-    metas = find_recent_notes_metadata(recent_days).notes
-    for meta in metas:
+    logger.info("function starting - find_recent_notes: %d", recent_days)
+    for meta in find_recent_notes_metadata(recent_days):
         yield note_by_guid(meta.guid)
 
 
 def get_link_prefixes():
+    logger.debug("function starting - get_link_prefixes")
+
     shard_id = get_user().shardId
     id = get_user().id
 
-    external = "https://www.evernote.com/shard/{0}/nl/{1}/".format(shard_id, get_user().id)
-    internal = "evernote:///view/{1}/{0}/".format(shard_id, get_user().id)
+    external = "https://www.evernote.com/shard/{0}/nl/{1}/".format(shard_id, id)
+    logger.debug("external prefix: %s", external)
 
-    return (external, internal)
+    internal = "evernote:///view/{1}/{0}/".format(shard_id, id)
+    logger.debug("internal prefix: %s", internal)
+
+    return external, internal
 
 
 def note_link_elements(note):
-    content_tree = etree.fromstring(note.content)
+    logger.info("function starting - note_link_elements: %s", note.title)
+
+    parser = etree.XMLParser(remove_blank_text=True, resolve_entities=False)
+    content_tree = etree.fromstring(note.content, parser)
     links = CSSSelector('a')(content_tree)
 
     prefixes = get_link_prefixes()
     for link in links:
         for prefix in prefixes:
             href = link.get("href")
-            if href.startswith(prefix):
+            logger.debug("checking href: %s", href)
+            if href and href.startswith(prefix):
                 yield link
 
 
+def is_backlink(link_element):
+    logger.debug("function starting - is_backlink: %s", etree.tostring(link_element))
+    parent_text = link_element.getparent().text
+    logger.debug("parent element: %s", parent_text)
+    is_backlink_result = parent_text and parent_text.startswith(BACKLINK_PREFIX)
+    logger.debug("result: %s", is_backlink_result)
+
+    return is_backlink_result
+
+
 def note_hrefs(note):
-    hrefs = [link.get("href") for link in note_link_elements(note)]
+    logger.info("function starting - note_hrefs: %s", note.title)
+
+    hrefs = [link.get("href") for link in note_link_elements(note) if is_backlink(link) == False]
     # set for unique links, list for indexed access
-    return list(set(hrefs))
+    unique_hrefs = list(set(hrefs))
+    logger.info("found hrefs: %s", unique_hrefs)
+
+    return unique_hrefs
 
 
 def note_back_hrefs(note):
+    logger.info("function starting - note_back_hrefs: %s", note.title)
+
     for link in note_link_elements(note):
-        parent_text = link.getparent().text
-        if parent_text and parent_text.startswith(BACKLINK_PREFIX):
-            yield link.get("href")
+        if is_backlink(link):
+            href = link.get("href")
+            logger.info("found backlink: %s", href)
+            yield href
 
 
 def guid_by_note_href(note_href):
+    logger.debug("function starting - guid_by_note_href: %s", note_href)
+
     # Get non-empty link parts (split by "/)
     link_parts = filter(lambda x: x, note_href.split("/"))
     guid = link_parts[-1]
+    logger.debug("found guid: %s", guid)
     return guid
 
 
 def add_backlink(src_note, dst_note):
+    logger.info("function starting - add_backlink")
+    logger.info("adding to note '%s' link to '%s'", src_note.title, dst_note.title)
+
     external_prefix, internal_prefix = get_link_prefixes()
     url = internal_prefix + "{0}/{0}/".format(dst_note.guid)
 
@@ -118,14 +163,66 @@ def add_backlink(src_note, dst_note):
     note_regex = re.compile("(<en-note.*?>)")
     src_note.content = note_regex.sub(r'\1' + backlink, src_note.content)
     get_store().updateNote(token, src_note);
+    logger.info("note updated")
+
+
+def write_last_processed_updated(note):
+    logger.info("function starting - write_last_processed_updated")
+
+    note_updated = note.updated / 1000
+    days_since_timestamp(note_updated)
+
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    with file(os.path.join(script_dir, "last_run_date.txt"), mode='w') as f:
+        data = {"last_note_updated": note_updated}
+        logger.debug("writing to file: %s", data)
+        f.write(json.dumps(data))
+
+
+def days_since_timestamp(timestamp):
+    updated_date = datetime.fromtimestamp(timestamp)
+    updated_time_delta = datetime.now() - updated_date
+    logger.info("days since processed note: %d", updated_time_delta.days)
+
+    return updated_time_delta.days
+
+
+def read_last_processed_updated():
+    logger.info("function starting - read_last_processed_updated")
+
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    file_path = os.path.join(script_dir, "last_run_date.txt")
+    if os.path.exists(file_path):
+        with file(file_path) as f:
+            data = json.loads(f.read())
+            logger.debug("read data: %s", data)
+
+            value = data["last_note_updated"]
+            logger.info("found updated value: %s", value)
+            return value
+    else:
+        logger.info("file does't exist")
+        return None
 
 
 def process_notes():
-    for note in find_recent_notes():
-        hrefs = note_hrefs(note)
+    logger.info("function starting - process_notes")
 
+    days_since = 100
+    last_processed_updated = read_last_processed_updated()
+    if last_processed_updated:
+        days_since = days_since_timestamp(last_processed_updated)
+
+    for note in find_recent_notes(days_since):
+        hrefs = note_hrefs(note)
         for href in hrefs:
             linked_note = note_by_guid(guid_by_note_href(href))
             backlink_guids = [guid_by_note_href(href) for href in note_back_hrefs(linked_note)]
             if note.guid not in backlink_guids:
                 add_backlink(src_note=linked_note, dst_note=note)
+
+        write_last_processed_updated(note)
+
+
+if __name__ == "__main__":
+    process_notes()
