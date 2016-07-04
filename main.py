@@ -1,7 +1,11 @@
 import json
 import os
 from datetime import datetime
+import time
 
+import sys
+
+import pync
 from evernote.api import client
 from evernote.edam.notestore.ttypes import NoteFilter, NotesMetadataResultSpec
 from evernote.edam.type.constants import NoteSortOrder
@@ -206,23 +210,30 @@ def read_last_processed_updated():
 
 
 def process_notes():
-    logger.info("function starting - process_notes")
+    try:
+        logger.info("function starting - process_notes")
 
-    days_since = 100
-    last_processed_updated = read_last_processed_updated()
-    if last_processed_updated:
-        days_since = days_since_timestamp(last_processed_updated)
+        days_since = 100
+        last_processed_updated = read_last_processed_updated()
+        if last_processed_updated:
+            days_since = days_since_timestamp(last_processed_updated)
 
-    for note in find_recent_notes(days_since):
-        hrefs = note_hrefs(note)
-        for href in hrefs:
-            linked_note = note_by_guid(guid_by_note_href(href))
-            backlink_guids = [guid_by_note_href(href) for href in note_back_hrefs(linked_note)]
-            if note.guid not in backlink_guids:
-                add_backlink(src_note=linked_note, dst_note=note)
+        for note in find_recent_notes(days_since):
+            hrefs = note_hrefs(note)
+            for href in hrefs:
+                linked_note = note_by_guid(guid_by_note_href(href))
+                backlink_guids = [guid_by_note_href(href) for href in note_back_hrefs(linked_note)]
+                if note.guid not in backlink_guids:
+                    add_backlink(src_note=linked_note, dst_note=note)
 
-        write_last_processed_updated(note)
-
+            write_last_processed_updated(note)
+    except Exception as e:
+        logger.exception("processing failed")
+        pync.Notifier.notify('Failed: {}'.format(str(e)), title='Evernote-Backlinker')
+        # notifier didn't work from launchd without sleep for some reason :|
+        # http://stackoverflow.com/questions/37010132/launchd-python-notifier-notify-not-producing-expected-output
+        time.sleep(1)
+        sys.exit(1)
 
 if __name__ == "__main__":
     process_notes()
