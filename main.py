@@ -81,6 +81,13 @@ def find_recent_notes(recent_days=1):
     for meta in find_recent_notes_metadata(recent_days):
         yield note_by_guid(meta.guid)
 
+def get_internal_link_prefix(user_id):
+    internal = "evernote:///view/{1}/{0}/".format(get_user().shardId, user_id)
+    logger.debug("internal prefix: %s", internal)
+
+    return internal
+
+
 
 def get_link_prefixes():
     logger.debug("function starting - get_link_prefixes")
@@ -91,10 +98,7 @@ def get_link_prefixes():
     external = "https://www.evernote.com/shard/{0}/nl/{1}/".format(shard_id, id)
     logger.debug("external prefix: %s", external)
 
-    internal = "evernote:///view/{1}/{0}/".format(shard_id, id)
-    logger.debug("internal prefix: %s", internal)
-
-    return external, internal
+    return [external, get_internal_link_prefix(id), get_internal_link_prefix(187234855)]
 
 
 def note_link_elements(note):
@@ -117,7 +121,7 @@ def is_backlink(link_element):
     logger.debug("function starting - is_backlink: %s", etree.tostring(link_element))
     parent_text = link_element.getparent().text
     logger.debug("parent element: %s", parent_text)
-    is_backlink_result = parent_text and parent_text.startswith(BACKLINK_PREFIX)
+    is_backlink_result = bool(parent_text) and parent_text.startswith(BACKLINK_PREFIX)
     logger.debug("result: %s", is_backlink_result)
 
     return is_backlink_result
@@ -158,10 +162,10 @@ def add_backlink(src_note, dst_note):
     logger.info("function starting - add_backlink")
     logger.info("adding to note '%s' link to '%s'", src_note.title, dst_note.title)
 
-    external_prefix, internal_prefix = get_link_prefixes()
+    internal_prefix = get_internal_link_prefix(get_user().id)
     url = internal_prefix + "{0}/{0}/".format(dst_note.guid)
 
-    backlink_text = "<span>{0}<a href='{1}' style='color:#69aa35'>{2}</a>{3}</span><br/>"
+    backlink_text = "<span>{0} <a href='{1}' style='color:#69aa35'>{2}</a>{3}</span><br/>"
     backlink = backlink_text.format(BACKLINK_PREFIX, url, dst_note.title, BACKLINK_SUFIX)
 
     note_regex = re.compile("(<en-note.*?>)")
