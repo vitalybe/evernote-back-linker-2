@@ -1,5 +1,5 @@
+colorclass == 2.2.0
 evernote == 1.25.1
 lxml == 3.6.0
 cssselect == 0.9.2
 pync == 1.6.1
-colorclass
