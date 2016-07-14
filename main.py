@@ -19,6 +19,7 @@ from colorclass import Color
 
 logger = getLogger(__name__)
 
+INTERNAL_LINK_PREFIX = "evernote:///view/"
 BACKLINK_PREFIX = u"[[[Backlink:"
 BACKLINK_SUFIX = u"]]]"
 
@@ -75,14 +76,6 @@ def find_recent_notes(recent_days=1):
         if result.totalNotes <= offset:
             break
 
-def get_internal_link_prefix(user_id):
-    internal = "evernote:///view/{1}/{0}/".format(get_user().shardId, user_id)
-    logger.debug("internal prefix: %s", internal)
-
-    return internal
-
-
-
 def get_link_prefixes():
     logger.debug("function starting - get_link_prefixes")
 
@@ -92,8 +85,7 @@ def get_link_prefixes():
     external = "https://www.evernote.com/shard/{0}/nl/{1}/".format(shard_id, id)
     logger.debug("external prefix: %s", external)
 
-    return [external, get_internal_link_prefix(id),
-            get_internal_link_prefix(187234855), get_internal_link_prefix(187234871)]
+    return [external, INTERNAL_LINK_PREFIX]
 
 
 def note_link_elements(note):
@@ -155,10 +147,9 @@ def guid_by_note_href(note_href):
 
 def add_backlink(src_note, dst_note):
     logger.debug("function starting - add_backlink")
-    logger.info("adding link '%s' -> '%s'", src_note.title, dst_note.title)
+    logger.info("adding backlink '%s' -> '%s'", src_note.title, dst_note.title)
 
-    internal_prefix = get_internal_link_prefix(get_user().id)
-    url = internal_prefix + "{0}/{0}/".format(dst_note.guid)
+    url = INTERNAL_LINK_PREFIX + "{1}/{0}/{2}/{2}/".format(get_user().shardId, get_user().id, dst_note.guid)
 
     backlink_text = "<span>{0} <a href='{1}' style='color:#69aa35'>{2}</a>{3}</span><br/>"
     backlink = backlink_text.format(BACKLINK_PREFIX, url, dst_note.title, BACKLINK_SUFIX)
