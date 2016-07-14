@@ -15,6 +15,8 @@ import re
 from local_settings import token
 
 from logging_config import getLogger
+from colorclass import Color
+
 logger = getLogger(__name__)
 
 BACKLINK_PREFIX = u"[[[Backlink:"
@@ -42,9 +44,15 @@ def get_user():
     return user
 
 
-def find_recent_notes_metadata(recent_days=1):
-    logger.info("function starting - find_recent_notes_metadata %d", recent_days)
+def note_by_guid(guid):
+    logger.debug("function starting - note_by_guid: %s", guid)
+    note = get_store().getNote(token, guid, True, False, False, False);
+    logger.debug("found note title: %s", note.title)
+    return note
 
+
+def find_recent_notes(recent_days=1):
+    logger.info("function starting - find_recent_notes: %d", recent_days)
     filter = NoteFilter()
     filter.ascending = True
     filter.order = NoteSortOrder.UPDATED
@@ -60,26 +68,12 @@ def find_recent_notes_metadata(recent_days=1):
         result = get_store().findNotesMetadata(token, filter, offset, pagesize, spec)
         logger.info("fetched %d out of %d notes", len(result.notes), result.totalNotes)
         for metadata in result.notes:
-            yield metadata
+            yield note_by_guid(metadata.guid)
 
         offset += pagesize
 
         if result.totalNotes <= offset:
             break
-
-
-
-def note_by_guid(guid):
-    logger.debug("function starting - note_by_guid: %s", guid)
-    note = get_store().getNote(token, guid, True, False, False, False);
-    logger.debug("found note title: %s", note.title)
-    return note
-
-
-def find_recent_notes(recent_days=1):
-    logger.info("function starting - find_recent_notes: %d", recent_days)
-    for meta in find_recent_notes_metadata(recent_days):
-        yield note_by_guid(meta.guid)
 
 def get_internal_link_prefix(user_id):
     internal = "evernote:///view/{1}/{0}/".format(get_user().shardId, user_id)
@@ -98,11 +92,12 @@ def get_link_prefixes():
     external = "https://www.evernote.com/shard/{0}/nl/{1}/".format(shard_id, id)
     logger.debug("external prefix: %s", external)
 
-    return [external, get_internal_link_prefix(id), get_internal_link_prefix(187234855)]
+    return [external, get_internal_link_prefix(id),
+            get_internal_link_prefix(187234855), get_internal_link_prefix(187234871)]
 
 
 def note_link_elements(note):
-    logger.info("function starting - note_link_elements: %s", note.title)
+    logger.debug("function starting - note_link_elements: %s", note.title)
 
     parser = etree.XMLParser(remove_blank_text=True, resolve_entities=False)
     content_tree = etree.fromstring(note.content, parser)
@@ -110,9 +105,9 @@ def note_link_elements(note):
 
     prefixes = get_link_prefixes()
     for link in links:
+        logger.debug("checking href: %s", etree.tostring(link))
         for prefix in prefixes:
             href = link.get("href")
-            logger.debug("checking href: %s", href)
             if href and href.startswith(prefix):
                 yield link
 
@@ -128,23 +123,23 @@ def is_backlink(link_element):
 
 
 def note_hrefs(note):
-    logger.info("function starting - note_hrefs: %s", note.title)
+    logger.debug("function starting - note_hrefs: %s", note.title)
 
     hrefs = [link.get("href") for link in note_link_elements(note) if is_backlink(link) == False]
     # set for unique links, list for indexed access
     unique_hrefs = list(set(hrefs))
-    logger.info("found hrefs: %s", unique_hrefs)
+    logger.debug("found hrefs: %s", unique_hrefs)
 
     return unique_hrefs
 
 
 def note_back_hrefs(note):
-    logger.info("function starting - note_back_hrefs: %s", note.title)
+    logger.debug("function starting - note_back_hrefs: %s", note.title)
 
     for link in note_link_elements(note):
         if is_backlink(link):
             href = link.get("href")
-            logger.info("found backlink: %s", href)
+            logger.debug("found backlink: %s", href)
             yield href
 
 
@@ -159,8 +154,8 @@ def guid_by_note_href(note_href):
 
 
 def add_backlink(src_note, dst_note):
-    logger.info("function starting - add_backlink")
-    logger.info("adding to note '%s' link to '%s'", src_note.title, dst_note.title)
+    logger.debug("function starting - add_backlink")
+    logger.info("adding link '%s' -> '%s'", src_note.title, dst_note.title)
 
     internal_prefix = get_internal_link_prefix(get_user().id)
     url = internal_prefix + "{0}/{0}/".format(dst_note.guid)
@@ -175,7 +170,7 @@ def add_backlink(src_note, dst_note):
 
 
 def write_last_processed_updated(note):
-    logger.info("function starting - write_last_processed_updated")
+    logger.debug("function starting - write_last_processed_updated")
 
     note_updated = note.updated / 1000
     days_since_timestamp(note_updated)
@@ -190,13 +185,13 @@ def write_last_processed_updated(note):
 def days_since_timestamp(timestamp):
     updated_date = datetime.fromtimestamp(timestamp)
     updated_time_delta = datetime.now() - updated_date
-    logger.info("days since processed note: %d", updated_time_delta.days)
+    logger.debug("days since processed note: %d", updated_time_delta.days)
 
     return updated_time_delta.days
 
 
 def read_last_processed_updated():
-    logger.info("function starting - read_last_processed_updated")
+    logger.debug("function starting - read_last_processed_updated")
 
     script_dir = os.path.dirname(os.path.realpath(__file__))
     file_path = os.path.join(script_dir, "last_run_date.txt")
@@ -206,16 +201,16 @@ def read_last_processed_updated():
             logger.debug("read data: %s", data)
 
             value = data["last_note_updated"]
-            logger.info("found updated value: %s", value)
+            logger.debug("found updated value: %s", value)
             return value
     else:
-        logger.info("file does't exist")
+        logger.info("last-processed file does't exist")
         return None
 
 
 def process_notes():
     try:
-        logger.info("function starting - process_notes")
+        logger.debug("function starting - process_notes")
 
         days_since = 100
         last_processed_updated = read_last_processed_updated()
@@ -223,12 +218,19 @@ def process_notes():
             days_since = days_since_timestamp(last_processed_updated)
 
         for note in find_recent_notes(days_since):
+            logger.info(Color('{green}processing note: %s{/green}'), note.title)
             hrefs = note_hrefs(note)
+            logger.info("found %s link to notes", len(hrefs))
             for href in hrefs:
                 linked_note = note_by_guid(guid_by_note_href(href))
+                logger.info("linked note: " + linked_note.title)
                 backlink_guids = [guid_by_note_href(href) for href in note_back_hrefs(linked_note)]
                 if note.guid not in backlink_guids:
+                    logger.info("backlink not found")
                     add_backlink(src_note=linked_note, dst_note=note)
+                else:
+                    logger.info("backlink found")
+
 
             write_last_processed_updated(note)
     except Exception as e:
