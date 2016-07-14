@@ -1,3 +1,13 @@
+About
+=====
+
+Have you ever looked at a note and wondered: Does it belong to any topic? Is it linked from somewhere else?
+
+This project can help you with that. It takes notes from looking like that:
+
+
+
+
 Setup
 =====
 
