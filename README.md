@@ -5,7 +5,7 @@ When my notes get large, I like to break them out and create index/table-of-cont
 
 This project can help you with that. It takes notes from looking like that:
 
-<img src="https://cloud.githubusercontent.com/assets/1933752/16868451/57e623be-4a80-11e6-9ecc-3709bbde332a.png" height="300px">
+<img src="https://cloud.githubusercontent.com/assets/1933752/16887746/7ec44268-4ae4-11e6-9ea8-44bee18889de.png" height="300px">
 
 Then the utility goes over all your recently edited notes and adds backlinks to the content notes, back to the notes that link to it. Bringing it to look like this:
 
