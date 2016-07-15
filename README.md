@@ -1,16 +1,15 @@
 About
 =====
 
-Have you ever looked at a note and wondered: Does it belong to any topic? Is it linked from somewhere else?
+When my notes get large, I like to break them out and create index/table-of-contents notes. However, it is hard to say later when looking on such note whether it belongs to any index.
 
 This project can help you with that. It takes notes from looking like that:
 
 <img src="https://cloud.githubusercontent.com/assets/1933752/16868451/57e623be-4a80-11e6-9ecc-3709bbde332a.png" height="300px">
 
-**To understanding exactly what these notes are:**
+Then the utility goes over all your recently edited notes and adds backlinks to the content notes, back to the notes that link to it. Bringing it to look like this:
 
 <img src="https://cloud.githubusercontent.com/assets/1933752/16868422/32b3f8c8-4a80-11e6-9db7-bc9c649c9fb9.png" height="300px">
-
 
 
 Setup
