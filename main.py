@@ -209,21 +209,29 @@ def process_notes():
             days_since = days_since_timestamp(last_processed_updated)
 
         for note in find_recent_notes(days_since):
-            logger.info(Color('{green}processing note: %s{/green}'), note.title)
-            hrefs = note_hrefs(note)
-            logger.info("found %s link to notes", len(hrefs))
-            for href in hrefs:
-                linked_note = note_by_guid(guid_by_note_href(href))
-                logger.info("linked note: " + linked_note.title)
-                backlink_guids = [guid_by_note_href(href) for href in note_back_hrefs(linked_note)]
-                if note.guid not in backlink_guids:
-                    logger.info("backlink not found")
-                    add_backlink(src_note=linked_note, dst_note=note)
-                else:
-                    logger.info("backlink found")
+            try:
+                logger.info(Color('{green}processing note: %s{/green}'), note.title)
+                hrefs = note_hrefs(note)
+                logger.info("found %s link to notes", len(hrefs))
+                for href in hrefs:
+                    linked_note = note_by_guid(guid_by_note_href(href))
+                    try:
+                        logger.info("linked note: " + linked_note.title)
+                        backlink_guids = [guid_by_note_href(href) for href in note_back_hrefs(linked_note)]
+                        if note.guid not in backlink_guids:
+                            logger.info("backlink not found")
+                            add_backlink(src_note=linked_note, dst_note=note)
+                        else:
+                            logger.info("backlink found")
 
+                        write_last_processed_updated(note)
+                    except Exception as e:
+                        logger.exception("processing note failed: " + linked_note.title)
+                        pync.Notifier.notify('Failed to process note {}: {}'.format(linked_note.title, str(e)), title='Evernote-Backlinker')
+            except Exception as e:
+                logger.exception("processing note failed: " + note.title)
+                pync.Notifier.notify('Failed to process note and all the notes that link to it {}: {}'.format(note.title, str(e)), title='Evernote-Backlinker')
 
-            write_last_processed_updated(note)
     except Exception as e:
         logger.exception("processing failed")
         pync.Notifier.notify('Failed: {}'.format(str(e)), title='Evernote-Backlinker')
