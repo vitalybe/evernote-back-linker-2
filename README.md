@@ -23,12 +23,11 @@ Setup
 
 `token = "YOUR_TOKEN_GOES HERE"`
 
-* Run: `python main.py`
-* Tip: Schedule the execution to run daily via a scheduler
-
 Usage
 =====
 
 Just run: `python main.py`
 
-Automatically runs since the last time it was executed. If it was never executed, processes notes from last 3 months.
+It will automatically process notes since the last time it was executed. If it was never executed, it will process notes from last 3 months.
+
+Tip: Schedule the execution to run daily via a scheduler.
